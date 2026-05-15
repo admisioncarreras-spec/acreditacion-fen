@@ -5,6 +5,7 @@ import AdminLayout from './pages/AdminLayout.jsx';
 import AdminEventos from './pages/AdminEventos.jsx';
 import AdminEventoDetail from './pages/AdminEventoDetail.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
+import AdminSalas from './pages/AdminSalas.jsx';
 import { isAuthed } from './utils/auth.js';
 
 export default function App() {
@@ -13,7 +14,7 @@ export default function App() {
       {/* Tótem público */}
       <Route path="/" element={<Totem />} />
 
-      {/* Login admin (redirige si ya está logueado) */}
+      {/* Login admin */}
       <Route
         path="/admin"
         element={isAuthed() ? <Navigate to="/admin/eventos" replace /> : <AdminLogin />}
@@ -24,9 +25,9 @@ export default function App() {
         <Route path="/admin/eventos" element={<AdminEventos />} />
         <Route path="/admin/eventos/:id" element={<AdminEventoDetail />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/salas" element={<AdminSalas />} />
       </Route>
 
-      {/* Fallback al tótem */}
       <Route path="*" element={<Totem />} />
     </Routes>
   );

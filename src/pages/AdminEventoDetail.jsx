@@ -1,10 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getToken, clearToken } from '../utils/auth';
 import { parseCSV, downloadCSV } from '../utils/csv';
-import { validateRut, formatRutClean } from '../utils/rut';
+import { validateRut, formatRutInput, formatRutClean } from '../utils/rut';
 import '../styles/admin.css';
+
+const POLL_MS = 15000;
+
+const EMPTY_WALKIN = {
+  rut: '',
+  nombre: '',
+  sala: '',
+  correo: '',
+  telefono: '',
+  acreditar: true,
+};
 
 export default function AdminEventoDetail() {
   const { id } = useParams();
@@ -12,30 +23,55 @@ export default function AdminEventoDetail() {
   const idEvento = decodeURIComponent(id);
   const [inscritos, setInscritos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [showUpload, setShowUpload] = useState(false);
+  const [showWalkIn, setShowWalkIn] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [uploadResult, setUploadResult] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [walkInData, setWalkInData] = useState(EMPTY_WALKIN);
+  const [walkInError, setWalkInError] = useState('');
+  const [walkInSaving, setWalkInSaving] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
-  const cargar = async () => {
-    setLoading(true);
+  // Ref para pausar polling si hay modal abierto
+  const modalAbiertoRef = useRef(false);
+  useEffect(() => {
+    modalAbiertoRef.current = showUpload || showWalkIn;
+  }, [showUpload, showWalkIn]);
+
+  const cargar = async ({ background = false } = {}) => {
+    if (background) setRefreshing(true);
+    else setLoading(true);
     const res = await api.inscritosEvento(idEvento, getToken());
     setLoading(false);
+    setRefreshing(false);
     if (!res.ok) {
       if (res.error?.toLowerCase().includes('autorizado')) {
         clearToken();
         navigate('/admin');
         return;
       }
-      alert(res.error || 'Error al cargar');
+      if (!background) alert(res.error || 'Error al cargar');
       return;
     }
     setInscritos(res.inscritos || []);
+    setLastUpdate(new Date());
   };
 
-  useEffect(() => { cargar(); }, [idEvento]);
+  // Carga inicial + polling
+  useEffect(() => {
+    let mounted = true;
+    cargar();
+    const t = setInterval(() => {
+      if (!mounted) return;
+      if (modalAbiertoRef.current) return;
+      cargar({ background: true });
+    }, POLL_MS);
+    return () => { mounted = false; clearInterval(t); };
+  }, [idEvento]);
 
   const filtrados = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
@@ -85,18 +121,12 @@ export default function AdminEventoDetail() {
       alert('No se detectaron filas en el CSV');
       return;
     }
-    // Validar mínimos
     const sample = rows[0];
     if (!('rut' in sample) || !('nombre' in sample)) {
       alert('El CSV debe tener al menos las columnas "rut" y "nombre" (en minúsculas, primera fila como headers)');
       return;
     }
-
-    // Validación local de RUTs (preview)
-    const conValidacion = rows.map(r => ({
-      ...r,
-      _validacion: validateRut(r.rut || ''),
-    }));
+    const conValidacion = rows.map(r => ({ ...r, _validacion: validateRut(r.rut || '') }));
     const validos = conValidacion.filter(r => r._validacion.valid);
     const invalidos = conValidacion.filter(r => !r._validacion.valid);
 
@@ -128,6 +158,56 @@ export default function AdminEventoDetail() {
     cargar();
   };
 
+  const handleWalkInField = (field, value) => {
+    let val = value;
+    if (field === 'rut') val = formatRutInput(value);
+    setWalkInData(prev => ({ ...prev, [field]: val }));
+  };
+
+  const submitWalkIn = async (e) => {
+    e.preventDefault();
+    setWalkInError('');
+    if (!walkInData.rut || !walkInData.nombre) {
+      setWalkInError('RUT y Nombre son obligatorios');
+      return;
+    }
+    const v = validateRut(walkInData.rut);
+    if (!v.valid) {
+      if (v.reason === 'dv') {
+        setWalkInError(`RUT inválido. ¿Será ${formatRutClean(v.suggestion)}?`);
+      } else {
+        setWalkInError('El RUT ingresado no es válido');
+      }
+      return;
+    }
+    setWalkInSaving(true);
+
+    // 1. Agregar/actualizar en lista
+    const res = await api.cargarInscritos(idEvento, [{
+      rut: walkInData.rut,
+      nombre: walkInData.nombre,
+      sala: walkInData.sala,
+      correo: walkInData.correo,
+      telefono: walkInData.telefono,
+    }], getToken());
+
+    if (!res.ok) {
+      setWalkInError(res.error || 'Error al agregar');
+      setWalkInSaving(false);
+      return;
+    }
+
+    // 2. Marcar como acreditado si corresponde
+    if (walkInData.acreditar) {
+      await api.marcarAsistenciaManual(walkInData.rut, idEvento, getToken());
+    }
+
+    setWalkInSaving(false);
+    setWalkInData(EMPTY_WALKIN);
+    setShowWalkIn(false);
+    cargar();
+  };
+
   const exportar = () => {
     const rows = inscritos.map(ins => ({
       RUT: ins.rut,
@@ -142,6 +222,11 @@ export default function AdminEventoDetail() {
     downloadCSV(rows, `acreditacion_${idEvento}_${fecha}.csv`);
   };
 
+  const horaActual = useMemo(() => {
+    if (!lastUpdate) return '';
+    return lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }, [lastUpdate]);
+
   return (
     <div className="admin-page">
       <Link to="/admin/eventos" className="admin-back-link">← Volver a eventos</Link>
@@ -149,11 +234,19 @@ export default function AdminEventoDetail() {
       <div className="admin-page-header">
         <div>
           <h1 className="admin-h1">{idEvento}</h1>
-          <p className="admin-h1-sub">Gestión de inscritos y asistencia</p>
+          <p className="admin-h1-sub">
+            Gestión de inscritos y asistencia
+            {lastUpdate && <span style={{ color: 'var(--gray-400)', marginLeft: 8, fontSize: 13 }}>
+              · actualizado a las {horaActual} {refreshing ? '· actualizando…' : '· auto cada 15s'}
+            </span>}
+          </p>
         </div>
         <div className="admin-actions-group">
-          <button onClick={() => setShowUpload(true)} className="admin-btn admin-btn-primary">
-            📥 Cargar inscritos (CSV)
+          <button onClick={() => setShowWalkIn(true)} className="admin-btn admin-btn-primary">
+            ➕ Agregar walk-in
+          </button>
+          <button onClick={() => setShowUpload(true)} className="admin-btn admin-btn-ghost">
+            📥 Cargar CSV
           </button>
           <button onClick={exportar} className="admin-btn admin-btn-ghost" disabled={inscritos.length === 0}>
             📤 Exportar
@@ -190,9 +283,14 @@ export default function AdminEventoDetail() {
           {inscritos.length === 0 ? (
             <>
               <p>No hay inscritos cargados para este evento.</p>
-              <button onClick={() => setShowUpload(true)} className="admin-btn admin-btn-primary">
-                Cargar el primer batch
-              </button>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <button onClick={() => setShowUpload(true)} className="admin-btn admin-btn-primary">
+                  Cargar por CSV
+                </button>
+                <button onClick={() => setShowWalkIn(true)} className="admin-btn admin-btn-ghost">
+                  Agregar uno manualmente
+                </button>
+              </div>
             </>
           ) : (
             <p>No hay resultados para "{busqueda}".</p>
@@ -243,6 +341,7 @@ export default function AdminEventoDetail() {
         </div>
       )}
 
+      {/* === MODAL CARGA CSV === */}
       {showUpload && (
         <div className="admin-modal-overlay" onClick={() => !uploading && setShowUpload(false)}>
           <div className="admin-modal admin-modal-large" onClick={(e) => e.stopPropagation()}>
@@ -300,6 +399,100 @@ export default function AdminEventoDetail() {
                 {uploading ? 'Procesando...' : 'Procesar y cargar'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* === MODAL WALK-IN === */}
+      {showWalkIn && (
+        <div className="admin-modal-overlay" onClick={() => !walkInSaving && setShowWalkIn(false)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2>Agregar walk-in</h2>
+              <button onClick={() => !walkInSaving && setShowWalkIn(false)} className="admin-modal-close">×</button>
+            </div>
+
+            <form onSubmit={submitWalkIn} className="admin-form">
+              <div className="admin-form-field">
+                <label>RUT *</label>
+                <input
+                  type="text"
+                  value={walkInData.rut}
+                  onChange={(e) => handleWalkInField('rut', e.target.value)}
+                  placeholder="12.345.678-9"
+                  className="admin-input"
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div className="admin-form-field">
+                <label>Nombre completo *</label>
+                <input
+                  type="text"
+                  value={walkInData.nombre}
+                  onChange={(e) => handleWalkInField('nombre', e.target.value)}
+                  placeholder="Ej: Juan Pérez González"
+                  className="admin-input"
+                  required
+                />
+              </div>
+
+              <div className="admin-form-row">
+                <div className="admin-form-field">
+                  <label>Sala</label>
+                  <input
+                    type="text"
+                    value={walkInData.sala}
+                    onChange={(e) => handleWalkInField('sala', e.target.value)}
+                    placeholder="Ej: H-304"
+                    className="admin-input"
+                  />
+                </div>
+                <div className="admin-form-field">
+                  <label>Teléfono</label>
+                  <input
+                    type="text"
+                    value={walkInData.telefono}
+                    onChange={(e) => handleWalkInField('telefono', e.target.value)}
+                    placeholder="9XXXXXXXX"
+                    className="admin-input"
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form-field">
+                <label>Correo</label>
+                <input
+                  type="email"
+                  value={walkInData.correo}
+                  onChange={(e) => handleWalkInField('correo', e.target.value)}
+                  placeholder="opcional"
+                  className="admin-input"
+                />
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--gray-700)', fontWeight: 500, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={walkInData.acreditar}
+                  onChange={(e) => handleWalkInField('acreditar', e.target.checked)}
+                  style={{ width: 18, height: 18, cursor: 'pointer' }}
+                />
+                Marcar como acreditado inmediatamente (ya está presente)
+              </label>
+
+              {walkInError && <div className="admin-error">{walkInError}</div>}
+
+              <div className="admin-modal-footer">
+                <button type="button" onClick={() => setShowWalkIn(false)} className="admin-btn admin-btn-ghost" disabled={walkInSaving}>
+                  Cancelar
+                </button>
+                <button type="submit" className="admin-btn admin-btn-primary" disabled={walkInSaving}>
+                  {walkInSaving ? 'Guardando...' : (walkInData.acreditar ? 'Agregar y acreditar' : 'Agregar a la lista')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

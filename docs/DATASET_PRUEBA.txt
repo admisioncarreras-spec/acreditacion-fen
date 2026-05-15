@@ -1,0 +1,63 @@
+📋 DATASET DE PRUEBA — 20 INSCRITOS
+
+Distribución por sala:
+  Sala H-101: 8 inscritos (80% de capacidad si la pones en 10)
+  Sala H-102: 6 inscritos (60%)
+  Sala H-103: 4 inscritos (40%)
+  Sala H-104: 2 inscritos (20%)
+
+═══════════════════════════════════════════════════════════════
+PASO 1: Define las 4 salas en /admin/salas (capacidad 10 cada una)
+PASO 2: Crea un evento de prueba con fecha = hoy y ventana 00:00-23:59
+PASO 3: Entra al evento, click "Cargar CSV", y pega EXACTAMENTE el bloque
+        de abajo (incluyendo la primera línea con los encabezados)
+═══════════════════════════════════════════════════════════════
+
+rut	nombre	sala	correo	telefono
+20.708.064-0	Antonia Reyes Castillo	Sala H-104	antonia.reyes@colegio.cl	987065122
+20.571.300-K	Maximiliano Silva Hernández	Sala H-101	maximiliano.silva@colegio.cl	979544950
+18.333.632-0	Felipe Carrasco González	Sala H-103	felipe.carrasco@colegio.cl	990922700
+17.339.319-9	Amanda Fuentes Morales	Sala H-101	amanda.fuentes@colegio.cl	958647630
+17.304.256-6	Antonia Cárdenas Morales	Sala H-102	antonia.cardenas@colegio.cl	946859215
+16.778.008-3	Florencia Díaz Rodríguez	Sala H-102	florencia.diaz@colegio.cl	996874384
+18.885.309-9	Agustín Martínez Sandoval	Sala H-103	agustin.martinez@colegio.cl	942915909
+22.121.433-1	Catalina Flores Díaz	Sala H-104	catalina.flores@colegio.cl	965403012
+16.661.023-0	Cristóbal Sepúlveda Vargas	Sala H-101	cristobal.sepulveda@colegio.cl	982187302
+21.188.519-K	Fernanda Carrasco Rodríguez	Sala H-102	fernanda.carrasco@colegio.cl	978745446
+17.613.033-4	Amanda Rojas Muñoz	Sala H-103	amanda.rojas@colegio.cl	984376630
+17.911.749-5	Trinidad Sepúlveda Rojas	Sala H-102	trinidad.sepulveda@colegio.cl	997399400
+17.952.791-K	Vicente Díaz López	Sala H-101	vicente.diaz@colegio.cl	958654492
+19.803.481-9	Emilia Vargas Rodríguez	Sala H-102	emilia.vargas@colegio.cl	950915531
+19.105.303-6	Tomás Contreras Tapia	Sala H-101	tomas.contreras@colegio.cl	957916578
+21.887.295-6	Ignacio Tapia Castillo	Sala H-103	ignacio.tapia@colegio.cl	944791741
+21.109.761-2	Emilia Soto Flores	Sala H-101	emilia.soto@colegio.cl	988930871
+18.053.622-1	Joaquín Hernández López	Sala H-102	joaquin.hernandez@colegio.cl	958115891
+21.368.707-7	Amanda Flores Silva	Sala H-101	amanda.flores@colegio.cl	985943684
+18.720.280-9	Magdalena Cárdenas Cárdenas	Sala H-101	magdalena.cardenas@colegio.cl	943753932
+
+═══════════════════════════════════════════════════════════════
+
+PASO 4: Una vez cargados, prueba estas cosas:
+
+  1. Marca asistencia de algunos → el contador del % sube al toque
+  2. En el panel de capacidad ves cómo se llenan las barras
+  3. Agrega un walk-in a Sala H-101 → debería decir "9/10 - 1 disponible"
+  4. Agrega otro walk-in a Sala H-101 → "10/10 LLENA" y bloquea más adiciones
+  5. Intenta agregar un 3er walk-in a H-101 → el dropdown la marca con 🔴 y disabled
+  6. Sala H-101 al 90% debería empezar a pulsar amarillo en el panel
+  7. Edita un inscrito (cambia su sala) → ves el cambio en el panel al instante
+  8. Elimina un inscrito → la fila desaparece y el panel se actualiza
+  9. Click el botón ↻ Reset → confirma 2 veces → todos vuelven a "pendiente"
+
+═══════════════════════════════════════════════════════════════
+
+RUTs ADICIONALES VÁLIDOS para probar walk-ins manuales:
+
+  22.456.789-3   (Sergio Pérez Soto)
+  21.555.222-4   (Daniela Castro Tapia)
+  20.999.888-3   (Joaquín Reyes Vargas)
+  19.444.333-K   (María José Aravena Pérez)
+  18.111.222-9   (Andrés Felipe Soto Torres)
+
+Estos son RUTs válidos con DV correcto que NO están en el dataset,
+sirven para simular gente que llega "sin inscripción previa" al mesón.

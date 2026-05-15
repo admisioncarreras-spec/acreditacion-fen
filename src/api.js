@@ -1,12 +1,10 @@
 // === API Client para Apps Script Backend ===
-// Si algún día redeploys el Apps Script con nueva URL, cámbiala acá:
 const API_URL = 'https://script.google.com/macros/s/AKfycbyDFvuey6tYCJpeWghlbR8LNnu-qlwVoCWI22Ak2dwtFdm94Jib_YvfIcrdxELQ-6_YGw/exec';
 
 async function callApi(action, params = {}) {
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
-      // No 'Content-Type' header — evita preflight CORS con Apps Script
       body: JSON.stringify({ action, ...params }),
     });
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -23,7 +21,7 @@ export const api = {
   buscarInscrito: (rut) => callApi('buscar_inscrito', { rut }),
   validarRut: (rut) => callApi('validar_rut', { rut }),
 
-  // Admin (para Fase 3)
+  // Admin
   loginAdmin: (password) => callApi('login_admin', { password }),
   listarEventos: (token) => callApi('listar_eventos', { token }),
   crearEvento: (evento, token) => callApi('crear_evento', { evento, token }),
@@ -34,4 +32,10 @@ export const api = {
   marcarAsistenciaManual: (rut, id_evento, token) => callApi('marcar_asistencia_manual', { rut, id_evento, token }),
   desmarcarAsistencia: (rut, id_evento, token) => callApi('desmarcar_asistencia', { rut, id_evento, token }),
   estadisticas: (id_evento, token) => callApi('estadisticas', { id_evento, token }),
+
+  // Salas
+  listarSalas: (token) => callApi('listar_salas', { token }),
+  guardarSala: (sala, token) => callApi('guardar_sala', { sala, token }),
+  eliminarSala: (nombre_sala, token) => callApi('eliminar_sala', { nombre_sala, token }),
+  capacidadEvento: (id_evento, token) => callApi('capacidad_evento', { id_evento, token }),
 };

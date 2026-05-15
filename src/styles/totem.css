@@ -361,9 +361,23 @@
   text-transform: capitalize;
 }
 
-/* === NO EVENT === */
+/* === NO EVENT / SOFT LOADING === */
 .no-event {
   padding: var(--space-5);
+}
+
+.spinner-soft {
+  width: 44px;
+  height: 44px;
+  border: 4px solid var(--gray-200);
+  border-top-color: var(--gray-400);
+  margin: 0 auto var(--space-4);
+}
+
+.loading-soft {
+  font-size: 16px;
+  color: var(--gray-400);
+  font-weight: 500;
 }
 
 .no-event h2 {

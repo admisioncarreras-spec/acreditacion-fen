@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getToken, clearToken } from '../utils/auth';
+import { loadCachedEventos, saveCachedEventos } from '../utils/eventCache';
 import '../styles/admin.css';
 
 const EMPTY_EVENT = {
@@ -17,8 +18,10 @@ const EMPTY_EVENT = {
 };
 
 export default function AdminEventos() {
-  const [eventos, setEventos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Inicializamos con cache si existe (carga instantánea)
+  const [eventos, setEventos] = useState(() => loadCachedEventos() || []);
+  const [loading, setLoading] = useState(() => !loadCachedEventos());
+  const [refreshing, setRefreshing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState(EMPTY_EVENT);
@@ -26,10 +29,11 @@ export default function AdminEventos() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const cargarEventos = async () => {
-    setLoading(true);
+  const cargarEventos = async ({ background = false } = {}) => {
+    if (background) setRefreshing(true);
     const res = await api.listarEventos(getToken());
     setLoading(false);
+    setRefreshing(false);
     if (!res.ok) {
       if (res.error?.toLowerCase().includes('autorizado')) {
         clearToken();
@@ -39,14 +43,16 @@ export default function AdminEventos() {
       setError(res.error || 'Error al cargar');
       return;
     }
-    // Ordenar por fecha descendente
-    const sorted = (res.eventos || []).sort((a, b) => {
-      return (b.fecha || '').localeCompare(a.fecha || '');
-    });
+    const sorted = (res.eventos || []).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
     setEventos(sorted);
+    saveCachedEventos(sorted);
   };
 
-  useEffect(() => { cargarEventos(); }, []);
+  // Al montar: si hay cache, valida en background. Si no, carga normal.
+  useEffect(() => {
+    const cached = loadCachedEventos();
+    cargarEventos({ background: !!cached });
+  }, []);
 
   const openCreate = () => {
     const hoy = new Date().toISOString().slice(0, 10);
@@ -89,13 +95,22 @@ export default function AdminEventos() {
       return;
     }
     closeForm();
-    cargarEventos();
+    cargarEventos(); // refresca y actualiza cache
   };
 
   const cambiarActivoManual = async (evento, nuevoValor) => {
+    // Optimista: actualizar UI inmediatamente
+    const eventosOptimistas = eventos.map(ev =>
+      ev.id_evento === evento.id_evento ? { ...ev, activo_manual: nuevoValor } : ev
+    );
+    setEventos(eventosOptimistas);
+    saveCachedEventos(eventosOptimistas);
+
     const res = await api.editarEvento(evento.id_evento, { activo_manual: nuevoValor }, getToken());
-    if (res.ok) cargarEventos();
-    else alert(res.error || 'Error al actualizar');
+    if (!res.ok) {
+      alert(res.error || 'Error al actualizar');
+      cargarEventos(); // revertir desde server
+    }
   };
 
   return (
@@ -103,7 +118,10 @@ export default function AdminEventos() {
       <div className="admin-page-header">
         <div>
           <h1 className="admin-h1">Eventos</h1>
-          <p className="admin-h1-sub">Gestiona los ensayos y actividades de acreditación</p>
+          <p className="admin-h1-sub">
+            Gestiona los ensayos y actividades de acreditación
+            {refreshing && <span style={{ color: 'var(--gray-400)', marginLeft: 8, fontSize: 13 }}>· actualizando…</span>}
+          </p>
         </div>
         <button onClick={openCreate} className="admin-btn admin-btn-primary">
           + Crear evento

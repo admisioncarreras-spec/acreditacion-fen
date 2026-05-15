@@ -6,19 +6,12 @@ import { loadCachedEventos, saveCachedEventos } from '../utils/eventCache';
 import '../styles/admin.css';
 
 const EMPTY_EVENT = {
-  id_evento: '',
-  nombre: '',
-  descripcion: '',
-  fecha: '',
-  hora_evento_inicio: '',
-  hora_evento_fin: '',
-  ventana_inicio: '',
-  ventana_fin: '',
-  activo_manual: 'auto',
+  id_evento: '', nombre: '', descripcion: '', fecha: '',
+  hora_evento_inicio: '', hora_evento_fin: '',
+  ventana_inicio: '', ventana_fin: '', activo_manual: 'auto',
 };
 
 export default function AdminEventos() {
-  // Inicializamos con cache si existe (carga instantánea)
   const [eventos, setEventos] = useState(() => loadCachedEventos() || []);
   const [loading, setLoading] = useState(() => !loadCachedEventos());
   const [refreshing, setRefreshing] = useState(false);
@@ -48,7 +41,6 @@ export default function AdminEventos() {
     saveCachedEventos(sorted);
   };
 
-  // Al montar: si hay cache, valida en background. Si no, carga normal.
   useEffect(() => {
     const cached = loadCachedEventos();
     cargarEventos({ background: !!cached });
@@ -59,12 +51,14 @@ export default function AdminEventos() {
     setFormData({ ...EMPTY_EVENT, fecha: hoy });
     setEditing(null);
     setShowForm(true);
+    setError('');
   };
 
   const openEdit = (evento) => {
     setFormData({ ...EMPTY_EVENT, ...evento });
     setEditing(evento.id_evento);
     setShowForm(true);
+    setError('');
   };
 
   const closeForm = () => {
@@ -95,21 +89,38 @@ export default function AdminEventos() {
       return;
     }
     closeForm();
-    cargarEventos(); // refresca y actualiza cache
+    cargarEventos();
   };
 
   const cambiarActivoManual = async (evento, nuevoValor) => {
-    // Optimista: actualizar UI inmediatamente
-    const eventosOptimistas = eventos.map(ev =>
+    const eventosOpt = eventos.map(ev =>
       ev.id_evento === evento.id_evento ? { ...ev, activo_manual: nuevoValor } : ev
     );
-    setEventos(eventosOptimistas);
-    saveCachedEventos(eventosOptimistas);
-
+    setEventos(eventosOpt);
+    saveCachedEventos(eventosOpt);
     const res = await api.editarEvento(evento.id_evento, { activo_manual: nuevoValor }, getToken());
     if (!res.ok) {
       alert(res.error || 'Error al actualizar');
-      cargarEventos(); // revertir desde server
+      cargarEventos();
+    }
+  };
+
+  const eliminarEvento = async (evento) => {
+    const msg = `¿Eliminar el evento "${evento.nombre}" (ID: ${evento.id_evento})?\n\n` +
+                `⚠️ ATENCIÓN: Esto SOLO borra el evento del listado.\n` +
+                `Los inscritos asociados a este evento NO se borran del Sheet,\n` +
+                `pero quedarán huérfanos (sin evento padre).\n\n` +
+                `Esta acción no se puede deshacer.`;
+    if (!confirm(msg)) return;
+    // Doble confirmación si tiene fecha de hoy o futura
+    const hoy = new Date().toISOString().slice(0, 10);
+    if (evento.fecha >= hoy && !confirm(`Este evento es de HOY o FUTURO (${evento.fecha}). ¿Seguro?`)) return;
+
+    const res = await api.eliminarEvento(evento.id_evento, getToken());
+    if (res.ok) {
+      cargarEventos();
+    } else {
+      alert(res.error || 'Error al eliminar');
     }
   };
 
@@ -123,9 +134,7 @@ export default function AdminEventos() {
             {refreshing && <span style={{ color: 'var(--gray-400)', marginLeft: 8, fontSize: 13 }}>· actualizando…</span>}
           </p>
         </div>
-        <button onClick={openCreate} className="admin-btn admin-btn-primary">
-          + Crear evento
-        </button>
+        <button onClick={openCreate} className="admin-btn admin-btn-primary">+ Crear evento</button>
       </div>
 
       {error && !showForm && <div className="admin-error-banner">{error}</div>}
@@ -158,9 +167,8 @@ export default function AdminEventos() {
                 <Link to={`/admin/eventos/${encodeURIComponent(ev.id_evento)}`} className="admin-btn admin-btn-primary admin-btn-sm">
                   Ver inscritos →
                 </Link>
-                <button onClick={() => openEdit(ev)} className="admin-btn admin-btn-ghost admin-btn-sm">
-                  Editar
-                </button>
+                <button onClick={() => openEdit(ev)} className="admin-btn admin-btn-ghost admin-btn-sm">Editar</button>
+                <button onClick={() => eliminarEvento(ev)} className="admin-btn admin-btn-sm admin-btn-danger">Eliminar</button>
               </div>
 
               <div className="admin-event-toggle">
@@ -189,55 +197,30 @@ export default function AdminEventos() {
             </div>
 
             <form onSubmit={handleSubmit} className="admin-form">
-              <div className="admin-form-row">
-                <div className="admin-form-field">
-                  <label>ID del evento *</label>
-                  <input
-                    type="text"
-                    value={formData.id_evento}
-                    onChange={(e) => handleField('id_evento', e.target.value)}
-                    placeholder="Ej: ENS-PAES-2026-NOV"
-                    className="admin-input"
-                    disabled={!!editing}
-                    required
-                  />
-                  <small>Identificador único, sin espacios. No editable después.</small>
-                </div>
+              <div className="admin-form-field">
+                <label>ID del evento *</label>
+                <input type="text" value={formData.id_evento} onChange={(e) => handleField('id_evento', e.target.value)}
+                  placeholder="Ej: ENS-PAES-2026-NOV" className="admin-input" disabled={!!editing} required />
+                <small>Identificador único, sin espacios. No editable después.</small>
               </div>
 
               <div className="admin-form-field">
                 <label>Nombre *</label>
-                <input
-                  type="text"
-                  value={formData.nombre}
-                  onChange={(e) => handleField('nombre', e.target.value)}
-                  placeholder="Ej: Ensayo PAES Matemática M1"
-                  className="admin-input"
-                  required
-                />
+                <input type="text" value={formData.nombre} onChange={(e) => handleField('nombre', e.target.value)}
+                  placeholder="Ej: Ensayo PAES Matemática M1" className="admin-input" required />
               </div>
 
               <div className="admin-form-field">
                 <label>Descripción</label>
-                <input
-                  type="text"
-                  value={formData.descripcion}
-                  onChange={(e) => handleField('descripcion', e.target.value)}
-                  placeholder="Opcional"
-                  className="admin-input"
-                />
+                <input type="text" value={formData.descripcion} onChange={(e) => handleField('descripcion', e.target.value)}
+                  placeholder="Opcional" className="admin-input" />
               </div>
 
               <div className="admin-form-row">
                 <div className="admin-form-field">
                   <label>Fecha *</label>
-                  <input
-                    type="date"
-                    value={formData.fecha}
-                    onChange={(e) => handleField('fecha', e.target.value)}
-                    className="admin-input"
-                    required
-                  />
+                  <input type="date" value={formData.fecha} onChange={(e) => handleField('fecha', e.target.value)}
+                    className="admin-input" required />
                 </div>
               </div>
 
@@ -245,21 +228,11 @@ export default function AdminEventos() {
               <div className="admin-form-row">
                 <div className="admin-form-field">
                   <label>Inicio</label>
-                  <input
-                    type="time"
-                    value={formData.hora_evento_inicio}
-                    onChange={(e) => handleField('hora_evento_inicio', e.target.value)}
-                    className="admin-input"
-                  />
+                  <input type="time" value={formData.hora_evento_inicio} onChange={(e) => handleField('hora_evento_inicio', e.target.value)} className="admin-input" />
                 </div>
                 <div className="admin-form-field">
                   <label>Fin</label>
-                  <input
-                    type="time"
-                    value={formData.hora_evento_fin}
-                    onChange={(e) => handleField('hora_evento_fin', e.target.value)}
-                    className="admin-input"
-                  />
+                  <input type="time" value={formData.hora_evento_fin} onChange={(e) => handleField('hora_evento_fin', e.target.value)} className="admin-input" />
                 </div>
               </div>
 
@@ -267,31 +240,17 @@ export default function AdminEventos() {
               <div className="admin-form-row">
                 <div className="admin-form-field">
                   <label>Desde</label>
-                  <input
-                    type="time"
-                    value={formData.ventana_inicio}
-                    onChange={(e) => handleField('ventana_inicio', e.target.value)}
-                    className="admin-input"
-                  />
+                  <input type="time" value={formData.ventana_inicio} onChange={(e) => handleField('ventana_inicio', e.target.value)} className="admin-input" />
                 </div>
                 <div className="admin-form-field">
                   <label>Hasta</label>
-                  <input
-                    type="time"
-                    value={formData.ventana_fin}
-                    onChange={(e) => handleField('ventana_fin', e.target.value)}
-                    className="admin-input"
-                  />
+                  <input type="time" value={formData.ventana_fin} onChange={(e) => handleField('ventana_fin', e.target.value)} className="admin-input" />
                 </div>
               </div>
 
               <div className="admin-form-field">
                 <label>Modo de activación</label>
-                <select
-                  value={formData.activo_manual}
-                  onChange={(e) => handleField('activo_manual', e.target.value)}
-                  className="admin-select"
-                >
+                <select value={formData.activo_manual} onChange={(e) => handleField('activo_manual', e.target.value)} className="admin-select">
                   <option value="auto">Auto (según ventana horaria)</option>
                   <option value="forzar_activo">Forzar activo (ignora ventana)</option>
                   <option value="forzar_inactivo">Forzar inactivo</option>

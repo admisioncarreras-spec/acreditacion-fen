@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getToken, clearToken } from '../utils/auth';
+import { loadCachedSalas, saveCachedSalas } from '../utils/eventCache';
 import '../styles/admin.css';
 
 export default function AdminSalas() {
-  const [salas, setSalas] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [salas, setSalas] = useState(() => loadCachedSalas() || []);
+  const [loading, setLoading] = useState(() => !loadCachedSalas());
+  const [refreshing, setRefreshing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({ nombre_sala: '', capacidad: '' });
@@ -14,10 +16,11 @@ export default function AdminSalas() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const cargar = async () => {
-    setLoading(true);
+  const cargar = async ({ background = false } = {}) => {
+    if (background) setRefreshing(true);
     const res = await api.listarSalas(getToken());
     setLoading(false);
+    setRefreshing(false);
     if (!res.ok) {
       if (res.error?.toLowerCase().includes('autorizado')) {
         clearToken();
@@ -27,10 +30,15 @@ export default function AdminSalas() {
       setError(res.error || 'Error al cargar');
       return;
     }
-    setSalas((res.salas || []).sort((a, b) => a.nombre_sala.localeCompare(b.nombre_sala)));
+    const sorted = (res.salas || []).sort((a, b) => a.nombre_sala.localeCompare(b.nombre_sala));
+    setSalas(sorted);
+    saveCachedSalas(sorted);
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    const cached = loadCachedSalas();
+    cargar({ background: !!cached });
+  }, []);
 
   const openCreate = () => {
     setFormData({ nombre_sala: '', capacidad: '' });
@@ -88,11 +96,12 @@ export default function AdminSalas() {
       <div className="admin-page-header">
         <div>
           <h1 className="admin-h1">Salas</h1>
-          <p className="admin-h1-sub">Define las salas disponibles y sus capacidades máximas</p>
+          <p className="admin-h1-sub">
+            Define las salas disponibles y sus capacidades máximas
+            {refreshing && <span style={{ color: 'var(--gray-400)', marginLeft: 8, fontSize: 13 }}>· actualizando…</span>}
+          </p>
         </div>
-        <button onClick={openCreate} className="admin-btn admin-btn-primary">
-          + Crear sala
-        </button>
+        <button onClick={openCreate} className="admin-btn admin-btn-primary">+ Crear sala</button>
       </div>
 
       {error && !showForm && <div className="admin-error-banner">{error}</div>}
@@ -120,12 +129,8 @@ export default function AdminSalas() {
                   <td><strong>{sala.nombre_sala}</strong></td>
                   <td style={{ textAlign: 'right' }} className="mono">{sala.capacidad}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <button onClick={() => openEdit(sala)} className="admin-btn admin-btn-ghost admin-btn-sm">
-                      Editar
-                    </button>
-                    <button onClick={() => eliminar(sala)} className="admin-btn admin-btn-sm" style={{ marginLeft: 4, background: 'var(--error-bg)', color: 'var(--error)' }}>
-                      Eliminar
-                    </button>
+                    <button onClick={() => openEdit(sala)} className="admin-btn admin-btn-ghost admin-btn-sm">Editar</button>
+                    <button onClick={() => eliminar(sala)} className="admin-btn admin-btn-sm admin-btn-danger" style={{ marginLeft: 4 }}>Eliminar</button>
                   </td>
                 </tr>
               ))}
@@ -148,30 +153,18 @@ export default function AdminSalas() {
             <form onSubmit={handleSubmit} className="admin-form">
               <div className="admin-form-field">
                 <label>Nombre de la sala *</label>
-                <input
-                  type="text"
-                  value={formData.nombre_sala}
+                <input type="text" value={formData.nombre_sala}
                   onChange={(e) => setFormData(prev => ({ ...prev, nombre_sala: e.target.value }))}
-                  placeholder="Ej: Sala H-304 (Edificio Place)"
-                  className="admin-input"
-                  disabled={!!editing}
-                  required
-                  autoFocus
-                />
+                  placeholder="Ej: Sala H-304 (Edificio Place)" className="admin-input"
+                  disabled={!!editing} required autoFocus />
                 {editing && <small>El nombre no se puede editar. Si necesitas renombrar, elimina y crea una nueva.</small>}
               </div>
 
               <div className="admin-form-field">
                 <label>Capacidad máxima *</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.capacidad}
+                <input type="number" min="0" value={formData.capacidad}
                   onChange={(e) => setFormData(prev => ({ ...prev, capacidad: e.target.value }))}
-                  placeholder="Ej: 50"
-                  className="admin-input"
-                  required
-                />
+                  placeholder="Ej: 50" className="admin-input" required />
                 <small>Número total de personas que caben en la sala.</small>
               </div>
 

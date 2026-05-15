@@ -39,15 +39,19 @@ export function validateRut(input) {
   if (dv !== dvEsperado) {
     return { valid: false, reason: 'dv', suggestion: cuerpo + dvEsperado };
   }
-
   return { valid: true, clean };
 }
 
-// Formatea un RUT limpio a forma 12.345.678-9
 export function formatRutClean(clean) {
   if (!clean || clean.length < 2) return clean;
   const cuerpo = clean.slice(0, -1);
   const dv = clean.slice(-1);
   const cuerpoFmt = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return `${cuerpoFmt}-${dv}`;
+}
+
+// Normaliza un RUT para comparación (quita puntos/guiones, uppercase)
+export function normalizeRut(input) {
+  if (!input) return '';
+  return input.toString().replace(/[^0-9kK]/g, '').toUpperCase();
 }

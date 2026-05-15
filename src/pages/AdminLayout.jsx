@@ -32,6 +32,9 @@ export default function AdminLayout() {
             <NavLink to="/admin/dashboard" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}>
               Dashboard
             </NavLink>
+            <NavLink to="/admin/salas" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}>
+              Salas
+            </NavLink>
           </nav>
           <button onClick={handleLogout} className="admin-logout-btn">Cerrar sesión</button>
         </div>

@@ -2,22 +2,37 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getToken, clearToken } from '../utils/auth';
+import { loadCachedEventos, saveCachedEventos } from '../utils/eventCache';
 import '../styles/admin.css';
 
 const POLL = 15000; // 15 segundos
 
+function pickDefaultEvento(eventos) {
+  if (!eventos || eventos.length === 0) return '';
+  const hoy = new Date().toISOString().slice(0, 10);
+  const eventoHoy = eventos.find(e => e.fecha === hoy);
+  if (eventoHoy) return eventoHoy.id_evento;
+  return eventos[0].id_evento;
+}
+
 export default function AdminDashboard() {
-  const [eventos, setEventos] = useState([]);
-  const [selectedId, setSelectedId] = useState('');
+  // Init desde cache para arranque instantáneo
+  const cachedInicial = loadCachedEventos();
+  const [eventos, setEventos] = useState(() => cachedInicial || []);
+  const [selectedId, setSelectedId] = useState(() => pickDefaultEvento(cachedInicial));
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(!!cachedInicial);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
   const navigate = useNavigate();
 
-  // Cargar lista de eventos
+  // Cargar lista de eventos (en background si ya hay cache)
   useEffect(() => {
     (async () => {
+      const cached = loadCachedEventos();
+      if (cached) setRefreshing(true);
       const res = await api.listarEventos(getToken());
+      setRefreshing(false);
       if (!res.ok) {
         if (res.error?.toLowerCase().includes('autorizado')) {
           clearToken();
@@ -28,28 +43,32 @@ export default function AdminDashboard() {
       }
       const sorted = (res.eventos || []).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
       setEventos(sorted);
-      // Auto-seleccionar el evento de hoy si existe
-      const hoy = new Date().toISOString().slice(0, 10);
-      const eventoHoy = sorted.find(e => e.fecha === hoy);
-      if (eventoHoy) setSelectedId(eventoHoy.id_evento);
-      else if (sorted.length > 0) setSelectedId(sorted[0].id_evento);
+      saveCachedEventos(sorted);
+      // Si no había selectedId aún (no había cache), seleccionar default
+      if (!selectedId) {
+        setSelectedId(pickDefaultEvento(sorted));
+      }
     })();
   }, []);
 
   // Polling de stats del evento seleccionado
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId) {
+      setLoadingStats(false);
+      return;
+    }
     let mounted = true;
     const fetchStats = async () => {
       const res = await api.estadisticas(selectedId, getToken());
       if (!mounted) return;
-      setLoading(false);
+      setLoadingStats(false);
       if (res.ok) {
         setStats(res);
         setLastUpdate(new Date());
       }
     };
-    setLoading(true);
+    setLoadingStats(true);
+    setStats(null);
     fetchStats();
     const t = setInterval(fetchStats, POLL);
     return () => { mounted = false; clearInterval(t); };
@@ -60,9 +79,6 @@ export default function AdminDashboard() {
     return lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }, [lastUpdate]);
 
-  const eventoActual = eventos.find(e => e.id_evento === selectedId);
-
-  // Datos para gráfico de barras por hora
   const datosHora = useMemo(() => {
     if (!stats?.por_hora) return [];
     const entries = Object.entries(stats.por_hora).sort((a, b) => a[0].localeCompare(b[0]));
@@ -70,7 +86,6 @@ export default function AdminDashboard() {
     return entries.map(([h, v]) => ({ hora: h, cantidad: v, pct: (v / max) * 100 }));
   }, [stats]);
 
-  // Datos por sala
   const datosSala = useMemo(() => {
     if (!stats?.por_sala) return [];
     return Object.entries(stats.por_sala)
@@ -89,6 +104,7 @@ export default function AdminDashboard() {
           <h1 className="admin-h1">Dashboard en vivo</h1>
           <p className="admin-h1-sub">
             {lastUpdate ? `Última actualización: ${horaActual} · se actualiza cada 15 seg` : 'Cargando...'}
+            {refreshing && <span style={{ color: 'var(--gray-400)', marginLeft: 8, fontSize: 13 }}>· actualizando…</span>}
           </p>
         </div>
         <div className="admin-actions-group">
@@ -107,7 +123,7 @@ export default function AdminDashboard() {
         <div className="admin-empty">
           <p>Selecciona un evento para ver sus estadísticas en vivo.</p>
         </div>
-      ) : loading && !stats ? (
+      ) : loadingStats && !stats ? (
         <div className="admin-loading">Cargando estadísticas...</div>
       ) : stats ? (
         <>

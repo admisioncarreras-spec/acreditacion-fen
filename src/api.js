@@ -32,5 +32,6 @@ export const api = {
   cargarInscritos: (id_evento, inscritos, token) => callApi('cargar_inscritos', { id_evento, inscritos, token }),
   buscarPorNombre: (nombre, id_evento, token) => callApi('buscar_por_nombre', { nombre, id_evento, token }),
   marcarAsistenciaManual: (rut, id_evento, token) => callApi('marcar_asistencia_manual', { rut, id_evento, token }),
+  desmarcarAsistencia: (rut, id_evento, token) => callApi('desmarcar_asistencia', { rut, id_evento, token }),
   estadisticas: (id_evento, token) => callApi('estadisticas', { id_evento, token }),
 };

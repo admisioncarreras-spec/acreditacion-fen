@@ -7,12 +7,44 @@ const RESET_DELAY = 6000;        // ms en pantallas de éxito
 const RESET_DELAY_ERROR = 5000;  // ms en pantallas de error
 const POLL_EVENTO = 60000;       // ms entre chequeos de evento activo
 
+// === Caché del evento en navegador (anti-flash al recargar) ===
+const EVENT_CACHE_KEY = 'fen_acreditacion_evento_v1';
+const EVENT_CACHE_MAX_AGE = 60 * 60 * 1000; // 1 hora
+
+function loadCachedEvento() {
+  try {
+    const raw = localStorage.getItem(EVENT_CACHE_KEY);
+    if (!raw) return null;
+    const { evento, timestamp } = JSON.parse(raw);
+    if (Date.now() - timestamp > EVENT_CACHE_MAX_AGE) {
+      localStorage.removeItem(EVENT_CACHE_KEY);
+      return null;
+    }
+    return evento;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedEvento(evento) {
+  try {
+    if (evento) {
+      localStorage.setItem(EVENT_CACHE_KEY, JSON.stringify({ evento, timestamp: Date.now() }));
+    } else {
+      localStorage.removeItem(EVENT_CACHE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export default function Totem() {
   const [stage, setStage] = useState('idle');
   // stages: idle | loading | success_new | success_repeat | rut_invalid | not_found | no_event | error
   const [rutInput, setRutInput] = useState('');
   const [result, setResult] = useState(null);
-  const [eventoActivo, setEventoActivo] = useState(null);
+  const [eventoActivo, setEventoActivo] = useState(loadCachedEvento);
+  const [primeraCarga, setPrimeraCarga] = useState(true);
   const [now, setNow] = useState(new Date());
   const resetTimer = useRef(null);
   const inputRef = useRef(null);
@@ -23,13 +55,16 @@ export default function Totem() {
     return () => clearInterval(t);
   }, []);
 
-  // Polling del evento activo
+  // Polling del evento activo (carga inmediata + cada 60s)
   useEffect(() => {
     let mounted = true;
     const fetchEvento = async () => {
       const res = await api.eventoActivo();
       if (!mounted) return;
-      setEventoActivo(res.ok ? res.evento : null);
+      const nuevo = res.ok ? res.evento : null;
+      setEventoActivo(nuevo);
+      saveCachedEvento(nuevo);
+      setPrimeraCarga(false);
     };
     fetchEvento();
     const t = setInterval(fetchEvento, POLL_EVENTO);
@@ -207,6 +242,11 @@ export default function Totem() {
                   </button>
                 </form>
               </>
+            ) : primeraCarga ? (
+              <div className="no-event">
+                <div className="spinner spinner-soft"></div>
+                <p className="loading-soft">Cargando información del evento...</p>
+              </div>
             ) : (
               <div className="no-event">
                 <div className="big-icon">⏰</div>

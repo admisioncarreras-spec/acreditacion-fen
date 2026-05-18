@@ -25,9 +25,6 @@ export default function AdminLayout() {
             <NavLink to="/admin/eventos" className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
               Eventos
             </NavLink>
-            <NavLink to="/admin/live" className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
-              📡 En Vivo
-            </NavLink>
             <NavLink to="/admin/dashboard" className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
               Dashboard
             </NavLink>

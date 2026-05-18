@@ -1,15 +1,11 @@
-import { Outlet, NavLink, useNavigate, Navigate } from 'react-router-dom';
-import { isAuthed, clearToken } from '../utils/auth';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { clearToken } from '../utils/auth';
 import '../styles/admin.css';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
 
-  if (!isAuthed()) {
-    return <Navigate to="/admin" replace />;
-  }
-
-  const handleLogout = () => {
+  const cerrarSesion = () => {
     clearToken();
     navigate('/admin');
   };
@@ -26,17 +22,20 @@ export default function AdminLayout() {
             </div>
           </div>
           <nav className="admin-nav">
-            <NavLink to="/admin/eventos" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}>
+            <NavLink to="/admin/eventos" className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
               Eventos
             </NavLink>
-            <NavLink to="/admin/dashboard" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}>
+            <NavLink to="/admin/live" className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
+              📡 En Vivo
+            </NavLink>
+            <NavLink to="/admin/dashboard" className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
               Dashboard
             </NavLink>
-            <NavLink to="/admin/salas" className={({ isActive }) => 'admin-nav-link' + (isActive ? ' active' : '')}>
+            <NavLink to="/admin/salas" className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
               Salas
             </NavLink>
           </nav>
-          <button onClick={handleLogout} className="admin-logout-btn">Cerrar sesión</button>
+          <button onClick={cerrarSesion} className="admin-logout-btn">Cerrar sesión</button>
         </div>
       </header>
       <main className="admin-main">

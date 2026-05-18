@@ -7,10 +7,10 @@ import AdminEventoDetail from './pages/AdminEventoDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminSalas from './pages/AdminSalas';
 import AdminLive from './pages/AdminLive';
-import { hasToken } from './utils/auth';
+import { getToken } from './utils/auth';
 
 function ProtectedRoute({ children }) {
-  if (!hasToken()) return <Navigate to="/admin" replace />;
+  if (!getToken()) return <Navigate to="/admin" replace />;
   return children;
 }
 

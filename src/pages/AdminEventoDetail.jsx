@@ -5,6 +5,7 @@ import { getToken, clearToken } from '../utils/auth';
 import { parseCSV, downloadCSV } from '../utils/csv';
 import { validateRut, formatRutInput, formatRutClean, normalizeRut } from '../utils/rut';
 import { loadCachedSalas, saveCachedSalas } from '../utils/eventCache';
+import { useSalaLlenaAlert, ToastContainer } from '../components/Toast';
 import '../styles/admin.css';
 
 const POLL_MS = 15000;
@@ -87,30 +88,40 @@ export default function AdminEventoDetail() {
 
   // === CALCULO LOCAL DE CAPACIDADES (instantáneo) ===
   const capacidades = useMemo(() => {
-    const asignaciones = {};
+    const inscritosPorSala = {};
+    const acreditadosPorSala = {};
     inscritos.forEach(ins => {
       const sala = (ins.sala || '').toString().trim();
-      if (sala) asignaciones[sala] = (asignaciones[sala] || 0) + 1;
+      if (sala) {
+        inscritosPorSala[sala] = (inscritosPorSala[sala] || 0) + 1;
+        if (ins.estado_asistencia === 'acreditado') {
+          acreditadosPorSala[sala] = (acreditadosPorSala[sala] || 0) + 1;
+        }
+      }
     });
 
     const result = salasMaster.map(s => {
       const capacidad = parseInt(s.capacidad) || 0;
-      const asignados = asignaciones[s.nombre_sala] || 0;
+      const inscritosCount = inscritosPorSala[s.nombre_sala] || 0;
+      const acreditadosCount = acreditadosPorSala[s.nombre_sala] || 0;
       return {
         nombre_sala: s.nombre_sala,
         capacidad,
-        asignados,
-        disponibles: Math.max(0, capacidad - asignados),
-        porcentaje: capacidad > 0 ? Math.round((asignados / capacidad) * 100) : 0,
+        inscritos: inscritosCount,
+        acreditados: acreditadosCount,
+        disponibles: Math.max(0, capacidad - inscritosCount),
+        porcentaje: capacidad > 0 ? Math.round((inscritosCount / capacidad) * 100) : 0,
       };
     });
 
     const masterNames = new Set(salasMaster.map(s => s.nombre_sala));
-    Object.keys(asignaciones).forEach(sala => {
+    Object.keys(inscritosPorSala).forEach(sala => {
       if (sala && !masterNames.has(sala)) {
         result.push({
           nombre_sala: sala, capacidad: 0,
-          asignados: asignaciones[sala], disponibles: 0,
+          inscritos: inscritosPorSala[sala],
+          acreditados: acreditadosPorSala[sala] || 0,
+          disponibles: 0,
           porcentaje: 100, sin_capacidad: true,
         });
       }
@@ -144,16 +155,20 @@ export default function AdminEventoDetail() {
 
   const resumenCapacidad = useMemo(() => {
     const totalCap = capacidades.reduce((s, c) => s + (c.capacidad || 0), 0);
-    const totalAsig = capacidades.reduce((s, c) => s + (c.asignados || 0), 0);
+    const totalInscritos = capacidades.reduce((s, c) => s + (c.inscritos || 0), 0);
+    const totalAcreditados = capacidades.reduce((s, c) => s + (c.acreditados || 0), 0);
     const salasLlenas = capacidades.filter(c => c.capacidad > 0 && c.disponibles === 0).length;
     const salasCasiLlenas = capacidades.filter(c => c.capacidad > 0 && c.porcentaje >= 90 && c.disponibles > 0).length;
     return {
-      totalCap, totalAsig,
-      totalDisp: Math.max(0, totalCap - totalAsig),
+      totalCap, totalInscritos, totalAcreditados,
+      totalDisp: Math.max(0, totalCap - totalInscritos),
       salasLlenas, salasCasiLlenas,
       sinCapacidad: totalCap === 0,
     };
   }, [capacidades]);
+
+  // Alerta sonora + toast cuando una sala se llena
+  const { toasts, removeToast } = useSalaLlenaAlert(capacidades);
 
   // === OPTIMISTIC: toggle asistencia ===
   const toggleAsistencia = async (ins) => {
@@ -237,7 +252,7 @@ export default function AdminEventoDetail() {
     if (walkInData.sala) {
       const cap = capacidades.find(c => c.nombre_sala === walkInData.sala);
       if (cap && cap.capacidad > 0 && cap.disponibles <= 0) {
-        setWalkInError(`La sala "${walkInData.sala}" está LLENA (${cap.asignados}/${cap.capacidad}). Elige otra sala.`);
+        setWalkInError(`La sala "${walkInData.sala}" está LLENA (${cap.inscritos}/${cap.capacidad}). Elige otra sala.`);
         return;
       }
     }
@@ -413,8 +428,8 @@ export default function AdminEventoDetail() {
               Capacidad de salas
               <span className="admin-capacity-summary">
                 {' '}· {resumenCapacidad.sinCapacidad
-                  ? `${resumenCapacidad.totalAsig} asignados (sin capacidad definida)`
-                  : `${resumenCapacidad.totalAsig}/${resumenCapacidad.totalCap} asignados`}
+                  ? `${resumenCapacidad.totalInscritos} inscritos (sin capacidad definida)`
+                  : `${resumenCapacidad.totalInscritos}/${resumenCapacidad.totalCap} inscritos · ${resumenCapacidad.totalAcreditados} acreditados`}
                 {resumenCapacidad.salasLlenas > 0 && (
                   <span className="admin-capacity-warn"> · {resumenCapacidad.salasLlenas} sala(s) llena(s)</span>
                 )}
@@ -447,14 +462,24 @@ export default function AdminEventoDetail() {
                     <div className="admin-capacity-bar">
                       <div className="admin-capacity-bar-fill" style={{ width: `${Math.min(100, pct)}%` }} />
                     </div>
-                    <div className="admin-capacity-numbers">
-                      <span className="admin-capacity-asig">{c.asignados}</span>
-                      <span className="admin-capacity-sep">/</span>
-                      <span className="admin-capacity-cap">{c.capacidad || '?'}</span>
+                    <div className="admin-capacity-rows">
+                      <div className="admin-capacity-row">
+                        <span className="admin-capacity-row-label">Capacidad:</span>
+                        <strong>{c.capacidad || 'sin definir'}</strong>
+                      </div>
+                      <div className="admin-capacity-row">
+                        <span className="admin-capacity-row-label">Inscritos:</span>
+                        <strong>{c.inscritos}</strong>
+                      </div>
+                      <div className={`admin-capacity-row admin-capacity-row-live ${c.inscritos > 0 && c.acreditados === c.inscritos ? 'row-completo' : ''}`}>
+                        <span className="admin-capacity-row-label">Acreditados:</span>
+                        <strong>{c.acreditados} {c.inscritos > 0 ? `de ${c.inscritos}` : ''}</strong>
+                      </div>
                       {!c.sin_capacidad && (
-                        <span className="admin-capacity-disp">
-                          {c.disponibles > 0 ? `· ${c.disponibles} libres` : '· LLENA'}
-                        </span>
+                        <div className={`admin-capacity-row admin-capacity-row-live ${c.disponibles === 0 ? 'row-llena' : ''}`}>
+                          <span className="admin-capacity-row-label">Lista de espera:</span>
+                          <strong>{c.disponibles === 0 ? 'SALA LLENA' : c.disponibles}</strong>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -601,7 +626,7 @@ export default function AdminEventoDetail() {
                       const label = c.sin_capacidad
                         ? `${c.nombre_sala} (sin capacidad definida)`
                         : llena
-                          ? `🔴 ${c.nombre_sala} — LLENA (${c.asignados}/${c.capacidad})`
+                          ? `🔴 ${c.nombre_sala} — LLENA (${c.inscritos}/${c.capacidad})`
                           : `${c.nombre_sala} — ${c.disponibles} disponibles (de ${c.capacidad})`;
                       return <option key={c.nombre_sala} value={c.nombre_sala} disabled={llena}>{label}</option>;
                     })}
@@ -613,7 +638,7 @@ export default function AdminEventoDetail() {
                 {salasDropdown.length > 0 && walkInData.sala && (() => {
                   const sel = capacidades.find(c => c.nombre_sala === walkInData.sala);
                   if (sel && !sel.sin_capacidad) {
-                    return <small style={{ color: 'var(--success)' }}>✓ Después de agregar: {sel.asignados + 1}/{sel.capacidad} ({sel.disponibles - 1} disponibles)</small>;
+                    return <small style={{ color: 'var(--success)' }}>✓ Después de agregar: {sel.inscritos + 1}/{sel.capacidad} ({sel.disponibles - 1} disponibles)</small>;
                   }
                   return null;
                 })()}
@@ -705,6 +730,8 @@ export default function AdminEventoDetail() {
           </div>
         </div>
       )}
+
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }

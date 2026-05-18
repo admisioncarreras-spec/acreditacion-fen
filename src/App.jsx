@@ -6,7 +6,6 @@ import AdminEventos from './pages/AdminEventos';
 import AdminEventoDetail from './pages/AdminEventoDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminSalas from './pages/AdminSalas';
-import AdminLive from './pages/AdminLive';
 import { getToken } from './utils/auth';
 
 function ProtectedRoute({ children }) {
@@ -34,7 +33,6 @@ export default function App() {
         >
           <Route path="/admin/eventos" element={<AdminEventos />} />
           <Route path="/admin/eventos/:id" element={<AdminEventoDetail />} />
-          <Route path="/admin/live" element={<AdminLive />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/salas" element={<AdminSalas />} />
         </Route>

@@ -21,23 +21,22 @@ export default function App() {
         {/* Tótem público */}
         <Route path="/" element={<Totem />} />
 
-        {/* Login */}
+        {/* Login admin */}
         <Route path="/admin" element={<AdminLogin />} />
 
-        {/* Panel admin protegido */}
+        {/* Panel admin protegido (layout wrapper sin path) */}
         <Route
-          path="/admin"
           element={
             <ProtectedRoute>
               <AdminLayout />
             </ProtectedRoute>
           }
         >
-          <Route path="eventos" element={<AdminEventos />} />
-          <Route path="eventos/:id" element={<AdminEventoDetail />} />
-          <Route path="live" element={<AdminLive />} />
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="salas" element={<AdminSalas />} />
+          <Route path="/admin/eventos" element={<AdminEventos />} />
+          <Route path="/admin/eventos/:id" element={<AdminEventoDetail />} />
+          <Route path="/admin/live" element={<AdminLive />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/salas" element={<AdminSalas />} />
         </Route>
 
         {/* Catch-all */}

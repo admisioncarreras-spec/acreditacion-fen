@@ -5,7 +5,6 @@ import { getToken, clearToken } from '../utils/auth';
 import { parseCSV, downloadCSV } from '../utils/csv';
 import { validateRut, formatRutInput, formatRutClean, normalizeRut } from '../utils/rut';
 import { loadCachedSalas, saveCachedSalas } from '../utils/eventCache';
-import { useSalaLlenaAlert, ToastContainer } from '../components/Toast';
 import '../styles/admin.css';
 
 const POLL_MS = 15000;
@@ -166,9 +165,6 @@ export default function AdminEventoDetail() {
       sinCapacidad: totalCap === 0,
     };
   }, [capacidades]);
-
-  // Alerta sonora + toast cuando una sala se llena
-  const { toasts, removeToast } = useSalaLlenaAlert(capacidades);
 
   // === OPTIMISTIC: toggle asistencia ===
   const toggleAsistencia = async (ins) => {
@@ -730,8 +726,6 @@ export default function AdminEventoDetail() {
           </div>
         </div>
       )}
-
-      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }
